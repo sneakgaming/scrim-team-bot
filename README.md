@@ -1,1 +1,1 @@
-scrim-team-bot
+Scrim Team Bot
