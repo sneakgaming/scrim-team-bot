@@ -1,0 +1,11 @@
+{
+  "name": "scrim-team-bot",
+  "version": "1.0.0",
+  "description": "A Discord Bot to be used with Scrim Teaming",
+  "main": "bot.js",
+  "author": "Sneak",
+  "dependencies": {
+    "discord.io": "^2.5.3",
+    "winston": "^3.1.0"
+  }
+}
