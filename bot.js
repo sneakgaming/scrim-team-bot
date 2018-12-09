@@ -1,6 +1,6 @@
-var Discord = require('discord.io')
-var logger = require('winston')
-var auth = require('./auth.json')
+const Discord = require('discord.io')
+const logger = require('winston')
+const teams = require('./teams')
 
 // Configure logger settings
 logger.remove(logger.transports.Console)
@@ -13,7 +13,7 @@ logger.level = 'debug'
 // Initialize Discord Bot
 // The Sneak Team Scrim bot responds to `!t` by default
 var bot = new Discord.Client({
-  token: auth.token,
+  token: process.env.BOT_TOKEN,
   autorun: true,
 })
 
@@ -33,15 +33,27 @@ bot.on('message', function (user, userID, channelID, message, evt) {
     var cmd = args[0]
 
     args = args.splice(1)
-    switch(cmd) {
-    case 'ping':
-      bot.sendMessage({
-        to: channelID,
-        message: 'Pong!',
-      })
-      break
-    default: break
+
+    if (cmd === 'ping') {
+      bot.sendMessage({ to: channelID, message: 'Pong!' })
+    }
+    else if (cmd === 'create') {
+      const teamName = getArgument(args, 0)
+      const err = teams.create(teamName, user, userID)
+
+      if (err !== null) {
+        bot.sendMessage({ to: channelID, message: `Could not create team. ${err}` })
+      } else {
+        bot.sendMessage({ to: channelID, message: 'Team Created.' })
+      }
     }
   }
 })
 
+const getArgument = (args, index) => {
+  if (index >= args.length) {
+    return null
+  }
+
+  return args[index]
+}
