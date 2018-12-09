@@ -9,7 +9,9 @@
     "npm": "6.1.0"
   },
   "dependencies": {
+    "assert": "^1.4.1",
     "discord.io": "https://github.com/woor/discord.io/tarball/gateway_v6",
+    "mongodb": "^3.1.10",
     "winston": "^3.1.0"
   },
   "scripts": {
