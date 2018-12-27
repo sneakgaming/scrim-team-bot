@@ -1,70 +1,21 @@
-const Discord = require('discord.io')
 const logger = require('winston')
 const teams = require('./teams')
 
-const MongoClient = require('mongodb').MongoClient
-const assert = require('assert')
+const Discord = require('discord.js')
+const client = new Discord.Client()
 
-
-// Configure DB/Node
-process.stdin.resume()
-
-const url = process.env.MONGO_URI
-const dbName = 'sneak-scrims-labs'
-const mClient = new MongoClient(url)
-var mDB
-
-mClient.connect(function(err) {
-  assert.strictEqual(null, err, 'Failed to connect to DB')
-  logger.info('Connected successfully to DB')
-
-  mDB = mClient.db(dbName)
+client.on('ready', () => {
+  logger.info(`Logged in as ${client.user.tag}!`)
 })
 
-function exitHandler(options, exitCode) {
-  options, exitCode
-  mClient.close()
-}
+client.on('message', msg => {
+  const channelID = msg.channel.id
+  const serverID = client.channels[channelID].guild_id
+  const server = client.servers[serverID]
+  const message = msg.content
 
-//do something when app is closing
-process.on('exit', exitHandler.bind(null, { cleanup:true }))
-
-//catches ctrl+c event
-process.on('SIGINT', exitHandler.bind(null, { exit:true }))
-
-// catches "kill pid" (for example: nodemon restart)
-process.on('SIGUSR1', exitHandler.bind(null, { exit:true }))
-process.on('SIGUSR2', exitHandler.bind(null, { exit:true }))
-
-//catches uncaught exceptions
-process.on('uncaughtException', exitHandler.bind(null, { exit:true }))
-
-
-// Configure logger settings
-logger.remove(logger.transports.Console)
-logger.add(new logger.transports.Console, {
-  colorize: true,
-})
-logger.level = 'debug'
-
-
-// Configure Bot settings
-
-var bot = new Discord.Client({
-  token: process.env.BOT_TOKEN,
-  autorun: true,
-})
-
-bot.on('ready', function (evt) {
-  evt // UNUSED
-
-  logger.info('Connected')
-  logger.info('Logged in as: ')
-  logger.info(bot.username + ' - (' + bot.id + ')')
-})
-
-bot.on('message', function (user, userID, channelID, message, evt) {
-  evt // UNUSED
+  const user = msg.author.username
+  const userID = msg.author.id
 
   if (message.substring(0, 2) === '!t') {
     var args = message.substring(3).split(' ')
@@ -73,18 +24,41 @@ bot.on('message', function (user, userID, channelID, message, evt) {
     args = args.splice(1)
 
     if (cmd === 'ping') {
-      bot.sendMessage({ to: channelID, message: 'Pong!' })
+      client.reply('Pong!')
     }
     else if (cmd === 'create') {
       const teamName = getArgument(args, 0)
-      const err = teams.create(mDB, teamName, user, userID)
 
-      if (err !== null) {
-        bot.sendMessage({ to: channelID, message: `Could not create team. ${err}` })
-      } else {
-        bot.sendMessage({ to: channelID, message: 'Team Created.' })
-      }
+      teams.create(teamName, user, userID, (err) => {
+        if (err) {
+          msg.reply(`@${user} - ${err.message}`)
+        } else {
+          msg.reply(`@${user} - You have created the team \`${teamName}!\``)
+        }
+      })
     }
+    else if (cmd === 'leave') {
+      teams.leave(userID, (err) => {
+        if (err) {
+          msg.reply(`@${user} - ${err.message}`)
+        } else {
+          msg.reply(`@${user} - You have left your team.`)
+        }
+      })
+    }
+    else if (cmd === 'info') {
+      teams.getTeamInformationEmbed(userID, server, (err, embedObj) => {
+        if (err) {
+          msg.reply(`@${user} - ${err.message}`)
+        } else {
+          msg.reply('', { embed: embedObj })
+        }
+      })
+    }
+  }
+
+  if (msg.content === 'ping') {
+    msg.reply('Pong!')
   }
 })
 
@@ -95,3 +69,29 @@ const getArgument = (args, index) => {
 
   return args[index]
 }
+
+client.login(process.env.BOT_TOKEN)
+
+/*
+module.exports = function() {
+  var bot = new Discord.Client({
+    token: process.env.BOT_TOKEN,
+    autorun: true,
+  })
+
+  bot.on('ready', function (evt) {
+    evt // UNUSED
+
+    logger.info('Connected')
+    logger.info('Logged in as: ')
+    logger.info(bot.username + ' - (' + bot.id + ')')
+  })
+
+  bot.on('message', (user, userID, channelID, message, evt) => {
+    evt // UNUSED
+
+
+  })
+
+
+}*/
