@@ -6,12 +6,10 @@ const client = new Discord.Client()
 
 client.on('ready', () => {
   logger.info(`Logged in as ${client.user.tag}!`)
+  client.user.setActivity('your commands', { type: 'LISTENING' })
 })
 
 client.on('message', msg => {
-  const channelID = msg.channel.id
-  const serverID = client.channels[channelID].guild_id
-  const server = client.servers[serverID]
   const message = msg.content
 
   const user = msg.author.username
@@ -47,7 +45,7 @@ client.on('message', msg => {
       })
     }
     else if (cmd === 'info') {
-      teams.getTeamInformationEmbed(userID, server, (err, embedObj) => {
+      teams.getTeamInformationEmbed(userID, client, (err, embedObj) => {
         if (err) {
           msg.reply(`@${user} - ${err.message}`)
         } else {
@@ -55,10 +53,18 @@ client.on('message', msg => {
         }
       })
     }
-  }
+    else if (cmd === 'invite') {
+      const userToInvite = getArgument(args, 0)
+      const inviteeID = userToInvite.replace(/[<@!>]/g, '')
 
-  if (msg.content === 'ping') {
-    msg.reply('Pong!')
+      teams.invite(userID, client, inviteeID, (err, embed) => {
+        if (err) {
+          msg.reply(`@${user} - ${err.message}`)
+        } else {
+          msg.reply(`@${user} - You have successfully invited a user.`)
+        }
+      })
+    }
   }
 })
 
@@ -70,28 +76,4 @@ const getArgument = (args, index) => {
   return args[index]
 }
 
-client.login(process.env.BOT_TOKEN)
-
-/*
-module.exports = function() {
-  var bot = new Discord.Client({
-    token: process.env.BOT_TOKEN,
-    autorun: true,
-  })
-
-  bot.on('ready', function (evt) {
-    evt // UNUSED
-
-    logger.info('Connected')
-    logger.info('Logged in as: ')
-    logger.info(bot.username + ' - (' + bot.id + ')')
-  })
-
-  bot.on('message', (user, userID, channelID, message, evt) => {
-    evt // UNUSED
-
-
-  })
-
-
-}*/
+module.exports.default = client

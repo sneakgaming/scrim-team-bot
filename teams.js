@@ -2,7 +2,7 @@ const logger = require('winston')
 const db = require('./db')
 
 // Returns the Embed object for a message containing team info
-module.exports.getTeamInformationEmbed = (userID, server, callback) => {
+module.exports.getTeamInformationEmbed = (userID, client, callback) => {
   db.checkExists('teams', { members: userID }, (err, exists) => {
     if (err || !exists) {
       callback(new Error('You are not in a team. Use `!t create <name>` to create a team.'), null)
@@ -12,31 +12,109 @@ module.exports.getTeamInformationEmbed = (userID, server, callback) => {
         if (err) {
           callback(new Error('Could not leave team.'), null)
         } else {
-          callback(null,  {
-            color: 0xffffff,
-            thumbnail: {
-              url: 'https://imgur.com/7ROyWB4.png',
-            },
-            title: '⚐ Team Information ⚐',
-            description: '',
-            fields: [
-              {
-                name: `Name: ${team.name}`,
-                value: team.description || 'No team description set.',
+          getTeamMembersString(client, team, (membersString) => {
+            callback(null,  {
+              color: 0xffffff,
+              thumbnail: {
+                url: 'https://imgur.com/7ROyWB4.png',
               },
-              {
-                name: 'Members',
-                value: '• Captain: ToDo',
+              title: '⚐ Team Information ⚐',
+              description: '',
+              fields: [
+                {
+                  name: `Name: ${team.name}`,
+                  value: team.description || 'No team description set.',
+                },
+                {
+                  name: 'Members',
+                  value: membersString,
+                },
+                {
+                  name: 'Stats',
+                  value: '• Points: 0\n• Wins: 0',
+                },
+              ],
+              footer: {
+                icon_url: 'https://cdn.shopify.com/s/files/1/2351/3873/files/sneak-favicon_7a2ffde5-3653-4c4d-a14d-a2e94a2768d9_32x32.png?v=1540828357',
+                text: `Team Size: ${team.members.length}/6`,
               },
-              {
-                name: 'Stats',
-                value: '• Points: 0\n• Wins: 0',
-              },
-            ],
-            footer: {
-              icon_url: 'https://cdn.shopify.com/s/files/1/2351/3873/files/sneak-favicon_7a2ffde5-3653-4c4d-a14d-a2e94a2768d9_32x32.png?v=1540828357',
-              text: `Team Size: ${team.members.length}/6`,
-            },
+            })
+          })
+        }
+      })
+    }
+  })
+}
+
+module.exports.invite = (userID, client, inviteeID, callback) => {
+  db.checkExists('teams', { members: inviteeID }, (err, exists) => {
+    if (err || exists) {
+      callback(new Error('The user you are trying to invite is already in a team.'), null)
+    } else {
+      db.checkExists('teams', { captain: userID }, (err, exists) => {
+        if (err) {
+          callback(new Error('Could not invite a member.'))
+        } else if (!exists) {
+          callback(new Error('You do not have permissions to invite a member.'))
+        } else {
+          db.findOne('teams', { members: userID }, (err, team) => {
+            if (err) {
+              callback(new Error('Could not invite to team.'), null)
+            } else {
+              db.findOneAndUpdate('teams', { captain: userID }, { '$push': { invitees: inviteeID } }, (err, result) => {
+                if (err || !result) {
+                  callback(new Error('Could not invite to team.'))
+                } else if (result) {
+                  client.fetchUser(inviteeID).then((invitee) => {
+                    invitee.sendEmbed({
+                      color: 0xffffff,
+                      title: ':envelope: Team Invite',
+                      description: `You have been invited to join **${team.name}**!\n\nReact to accept or deny this request.`,
+                      footer: {
+                        text: `Performed by @<${userID}>`,
+                      },
+                    })
+                      .then((sentEmbed) => {
+                        callback(null)
+
+                        // SEND THE INVITE
+                        sentEmbed.react('✅').then(() => sentEmbed.react('❌'))
+                        const filter = (reaction, user) => {
+                          return ['✅', '❌'].includes(reaction.emoji.name) && user.id === inviteeID
+                        }
+
+                        sentEmbed.awaitReactions(filter, { max: 1, time: 60000, errors: ['time'] })
+                          .then(collected => {
+                            const reaction = collected.first()
+
+                            if (reaction.emoji.name === '✅') {
+                              // ACCEPTED
+                              db.findOneAndUpdate('teams', { captain: userID }, { '$push': { members: inviteeID } }, (err, result) => {
+                                if (err || !result) {
+                                  invitee.send('Something went wrong.')
+                                  client.fetchUser(userID).then(user => user.send(`Something went wrong with your invitation to ${invitee.username}.`))
+                                } else {
+                                  invitee.send('You have accepted the invitation.')
+                                  client.fetchUser(userID).then(user => user.send(`${invitee.username} has accepted your invitation!`))
+                                }
+                              })
+                            }
+                            else {
+                              // DECLINED
+                              invitee.send('You have declined the invitation.')
+                              client.fetchUser(userID).then(user => user.send(`${invitee.username} has declined your invitation.`))
+                            }
+                          })
+                          .catch(() => {
+                            sentEmbed.reply(`Your invite to join ${team.name} has expired.`)
+                            client.fetchUser(userID).then(user => user.send(`${invitee.username} failed to respond to your invitation.`))
+                          })
+                      })
+                      .catch(() => callback(new Error('Could not send message to invited member.')))
+                  })
+                }
+              })
+            }
           })
         }
       })
@@ -96,4 +174,29 @@ module.exports.create = (teamName, user, userID, callback) => {
       })
     }
   })
+}
+
+const getTeamMembersString = (client, team, callback) => {
+  var teamMembersFetched = 0
+  var teamMembers = []
+  var membersString = ''
+
+  for (let index = 0; index < team.members.length; index++) {
+    const memberID = team.members[index]
+    client.fetchUser(memberID)
+      .then((member) => {
+        teamMembers.push(member)
+
+        // Captain should always be first in member list.
+        if(member.id === team.captain) {
+          membersString += `• Captain: ${member.username}\n`
+        } else {
+          membersString += `• Member: ${member.username}\n`
+        }
+
+        if (++teamMembersFetched === team.members.length) {
+          callback(membersString)
+        }
+      })
+  }
 }

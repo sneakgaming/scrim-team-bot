@@ -1,7 +1,7 @@
+// Discord.js bot
 const logger = require('winston')
 const db = require('./db')
-
-// Configure logger settings
+const client = require('./bot').default
 
 logger.remove(logger.transports.Console)
 logger.add(new logger.transports.Console, {
@@ -9,9 +9,6 @@ logger.add(new logger.transports.Console, {
 })
 logger.level = 'debug'
 
-
-// Initialise DB and then Bot
-
 db.initialize(() => {
-  require('./bot')()
+  client.login(process.env.BOT_TOKEN)
 })
