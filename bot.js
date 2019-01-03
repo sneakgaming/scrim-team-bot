@@ -27,27 +27,27 @@ client.on('message', msg => {
     else if (cmd === 'create') {
       const teamName = getArgument(args, 0)
 
-      teams.create(teamName, user, userID, (err) => {
+      teams.create(msg, client, teamName, userID, (err) => {
         if (err) {
-          msg.reply(`@${user} - ${err.message}`)
+          msg.reply(`${err.message}`)
         } else {
-          msg.reply(`@${user} - You have created the team \`${teamName}!\``)
+          msg.reply(`You have created the team \`${teamName}!\``)
         }
       })
     }
     else if (cmd === 'leave') {
-      teams.leave(userID, (err) => {
+      teams.leave(msg, client, userID, (err) => {
         if (err) {
-          msg.reply(`@${user} - ${err.message}`)
+          msg.reply(`${err.message}`)
         } else {
-          msg.reply(`@${user} - You have left your team.`)
+          msg.reply('You have left your team.')
         }
       })
     }
     else if (cmd === 'info') {
-      teams.getTeamInformationEmbed(userID, client, (err, embedObj) => {
+      teams.getTeamInformationEmbed(msg, userID, client, (err, embedObj) => {
         if (err) {
-          msg.reply(`@${user} - ${err.message}`)
+          msg.reply(`${err.message}`)
         } else {
           msg.reply('', { embed: embedObj })
         }
@@ -57,11 +57,11 @@ client.on('message', msg => {
       const userToInvite = getArgument(args, 0)
       const inviteeID = userToInvite.replace(/[<@!>]/g, '')
 
-      teams.invite(userID, client, inviteeID, (err, embed) => {
+      teams.invite(msg, userID, client, inviteeID, (err, embed) => {
         if (err) {
-          msg.reply(`@${user} - ${err.message}`)
+          msg.reply(`${err.message}`)
         } else {
-          msg.reply(`@${user} - You have successfully invited a user.`)
+          msg.reply('You have successfully invited a user.')
         }
       })
     }

@@ -2,7 +2,7 @@ const logger = require('winston')
 const db = require('./db')
 
 // Returns the Embed object for a message containing team info
-module.exports.getTeamInformationEmbed = (userID, client, callback) => {
+module.exports.getTeamInformationEmbed = (msg, userID, client, callback) => {
   db.checkExists('teams', { members: userID }, (err, exists) => {
     if (err || !exists) {
       callback(new Error('You are not in a team. Use `!t create <name>` to create a team.'), null)
@@ -46,7 +46,7 @@ module.exports.getTeamInformationEmbed = (userID, client, callback) => {
   })
 }
 
-module.exports.invite = (userID, client, inviteeID, callback) => {
+module.exports.invite = (msg, userID, client, inviteeID, callback) => {
   db.checkExists('teams', { members: inviteeID }, (err, exists) => {
     if (err || exists) {
       callback(new Error('The user you are trying to invite is already in a team.'), null)
@@ -94,14 +94,22 @@ module.exports.invite = (userID, client, inviteeID, callback) => {
                                   invitee.send('Something went wrong.')
                                   client.fetchUser(userID).then(user => user.send(`Something went wrong with your invitation to ${invitee.username}.`))
                                 } else {
-                                  invitee.send('You have accepted the invitation.')
-                                  client.fetchUser(userID).then(user => user.send(`${invitee.username} has accepted your invitation!`))
+                                  renameUser(msg, invitee, team.name, (err) => {
+                                    if (err) {
+                                      invitee.send('Something went wrong.')
+                                      client.fetchUser(userID).then(user => user.send(`Something went wrong with your invitation to ${invitee.username}.`))
+                                    }
+                                    else {
+                                      invitee.send('You have accepted the invitation.')
+                                      client.fetchUser(userID).then(user => user.send(`${invitee.username} has accepted your invitation!`))
+                                    }
+                                  })
                                 }
                               })
                             }
                             else {
                               // DECLINED
-                              invitee.send('You have declined the invitation.')
+                              invitee.send('You have declihned the invitation.')
                               client.fetchUser(userID).then(user => user.send(`${invitee.username} has declined your invitation.`))
                             }
                           })
@@ -122,7 +130,7 @@ module.exports.invite = (userID, client, inviteeID, callback) => {
   })
 }
 
-module.exports.leave = (userID, callback) => {
+module.exports.leave = (msg, client, userID, callback) => {
   db.checkExists('teams', { members: userID }, (err, exists) => {
     if (err) {
       callback(new Error('Could not leave team.'))
@@ -134,8 +142,12 @@ module.exports.leave = (userID, callback) => {
           logger.error(err.message)
           callback(new Error('Could not leave team.'))
         } else if (result) {
-          db.deleteMany('teams', { 'members.0': { '$exists': false } }, () => {
-            callback(null)
+          client.fetchUser(userID).then(user => {
+            renameUser(msg, user, '', () => {
+              db.deleteMany('teams', { 'members.0': { '$exists': false } }, () => {
+                callback(null)
+              })
+            })
           })
         }
       })
@@ -143,9 +155,8 @@ module.exports.leave = (userID, callback) => {
   })
 }
 
-module.exports.create = (teamName, user, userID, callback) => {
+module.exports.create = (msg, client, teamName, userID, callback) => {
   logger.info('Create Team')
-  logger.info(teamName + ' ' + user + ' ', userID)
 
   if (teamName === null) {
     callback(new Error('No team name provided.'))
@@ -169,11 +180,27 @@ module.exports.create = (teamName, user, userID, callback) => {
         if (exists) {
           callback(new Error('You\'re already in a team. Use `!t leave` to leave your current team.'))
         } else {
-          db.insertDocument('teams', { name: teamName, captain: userID, members:[userID] }, ()=>callback(null))
+          db.insertDocument('teams', { name: teamName, captain: userID, members:[userID] }, ()=> {
+            client.fetchUser(userID).then((user) => {
+              renameUser(msg, user, teamName, () => {
+                callback(null)
+              })
+            }).catch(err => callback(err))
+          })
         }
       })
     }
   })
+}
+
+const renameUser = (msg, user, teamName, callback) => {
+  const guildMember = msg.guild.members.get(user.id)
+
+  if (teamName !== '') {
+    guildMember.setNickname(`[${teamName}] ${user.username}`).then(()=>callback(null)).catch(err => { logger.error(err); callback(err) })
+  } else {
+    guildMember.setNickname(user.username.replace(/\[.*?\] /g, '')).then(()=>callback(null)).catch(err => { logger.error(err);  callback(err)})
+  }
 }
 
 const getTeamMembersString = (client, team, callback) => {
