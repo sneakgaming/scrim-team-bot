@@ -1,5 +1,6 @@
 const logger = require('winston')
 const teams = require('./teams')
+const help = require('./help')
 
 const Discord = require('discord.js')
 const client = new Discord.Client()
@@ -64,6 +65,23 @@ client.on('message', msg => {
           msg.reply('You have successfully invited a user.')
         }
       })
+    }
+    else if (cmd === 'help') {
+      const singleCommand = getArgument(args, 0)
+
+      if (singleCommand == null) {
+        msg.channel.send('', { embed: help.getAllHelpEmbed() })
+      }
+      else {
+        const helpResult = help.getHelpMessage(singleCommand)
+
+        if (helpResult == null) {
+          msg.reply(`No command found with name ${singleCommand}`)
+        } else {
+          msg.channel.send(helpResult)
+        }
+
+      }
     }
   }
 })
