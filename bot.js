@@ -10,6 +10,10 @@ client.on('ready', () => {
   client.user.setActivity('your commands', { type: 'LISTENING' })
 })
 
+client.on('guildMemberAdd', (member) => {
+  member.addRole('520304426737598474').then().catch(err => logger.info(err))
+})
+
 client.on('message', msg => {
   const message = msg.content
 
